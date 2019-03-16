@@ -695,6 +695,11 @@ function ReadableStreamClose(stream) {
       _resolve(ReadableStreamCreateReadResult(undefined, true, reader._forAuthorCode));
     }
     reader._readRequests = [];
+  } else {
+    for (const { _resolve } of reader._readIntoRequests) {
+      _resolve(ReadableStreamCreateReadResult(undefined, true, reader._forAuthorCode));
+    }
+    reader._readIntoRequests = [];
   }
 
   defaultReaderClosedPromiseResolve(reader);
