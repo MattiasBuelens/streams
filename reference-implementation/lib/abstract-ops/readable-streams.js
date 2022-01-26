@@ -2,7 +2,7 @@
 const assert = require('assert');
 
 const { promiseResolvedWith, promiseRejectedWith, newPromise, resolvePromise, rejectPromise, uponPromise,
-        setPromiseIsHandledToTrue, waitForAllPromise, transformPromiseWith, uponFulfillment, uponRejection } =
+        setPromiseIsHandledToTrue, waitForAllPromise, transformPromiseWith, uponRejection } =
   require('../helpers/webidl.js');
 const { rethrowAssertionErrorRejection } = require('../helpers/miscellaneous.js');
 const { CanTransferArrayBuffer, CopyDataBlockBytes, CreateArrayFromList, IsDetachedBuffer, TransferArrayBuffer } =
@@ -144,7 +144,7 @@ function ReadableStreamPipeTo(source, dest, preventClose, preventAbort, preventC
   let shuttingDown = false;
 
   // This is used to keep track of the spec's requirement that we wait for ongoing writes during shutdown.
-  let currentWrite = promiseResolvedWith(undefined);
+  let currentWrite;
 
   return new Promise((resolve, reject) => {
     let abortAlgorithm;
@@ -291,14 +291,19 @@ function ReadableStreamPipeTo(source, dest, preventClose, preventAbort, preventC
       setPromiseIsHandledToTrue(pipeLoop());
     }
 
-    function waitForWritesToFinish() {
+    function waitForWritesToFinish(action) {
       // Another write may have started while we were waiting on this currentWrite, so we have to be sure to wait
       // for that too.
-      const oldCurrentWrite = currentWrite;
-      return transformPromiseWith(
-        currentWrite,
-        () => oldCurrentWrite !== currentWrite ? waitForWritesToFinish() : undefined
-      );
+      let oldCurrentWrite;
+      check();
+
+      function check() {
+        if (oldCurrentWrite === currentWrite) {
+          return action();
+        }
+        oldCurrentWrite = currentWrite;
+        return transformPromiseWith(currentWrite, check, check);
+      }
     }
 
     function shutdownWithAction(action, originalIsError, originalError) {
@@ -310,7 +315,7 @@ function ReadableStreamPipeTo(source, dest, preventClose, preventAbort, preventC
       reader = AcquireReadableStreamDefaultReader(source);
 
       if (dest._state === 'writable' && WritableStreamCloseQueuedOrInFlight(dest) === false) {
-        uponFulfillment(waitForWritesToFinish(), doTheRest);
+        waitForWritesToFinish(doTheRest);
       } else {
         doTheRest();
       }
@@ -333,7 +338,7 @@ function ReadableStreamPipeTo(source, dest, preventClose, preventAbort, preventC
       reader = AcquireReadableStreamDefaultReader(source);
 
       if (dest._state === 'writable' && WritableStreamCloseQueuedOrInFlight(dest) === false) {
-        uponFulfillment(waitForWritesToFinish(), () => finalize(isError, error));
+        waitForWritesToFinish(() => finalize(isError, error));
       } else {
         finalize(isError, error);
       }
