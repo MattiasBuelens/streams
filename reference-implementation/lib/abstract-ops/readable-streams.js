@@ -4,6 +4,7 @@ const assert = require('assert');
 const { promiseResolvedWith, promiseRejectedWith, newPromise, resolvePromise, rejectPromise, uponPromise,
         setPromiseIsHandledToTrue, waitForAllPromise, transformPromiseWith, uponFulfillment, uponRejection } =
   require('../helpers/webidl.js');
+const { rethrowAssertionErrorRejection } = require('../helpers/miscellaneous.js');
 const { CanTransferArrayBuffer, CopyDataBlockBytes, CreateArrayFromList, IsDetachedBuffer, TransferArrayBuffer } =
   require('./ecmascript.js');
 const { CloneAsUint8Array, IsNonNegativeNumber } = require('./miscellaneous.js');
@@ -213,7 +214,7 @@ function ReadableStreamPipeTo(source, dest, preventClose, preventAbort, preventC
             {
               chunkSteps: chunk => {
                 currentWrite = transformPromiseWith(
-                  WritableStreamDefaultWriterWrite(writer, chunk), undefined, () => {}
+                  WritableStreamDefaultWriterWrite(writer, chunk), undefined, rethrowAssertionErrorRejection
                 );
                 resolveRead(false);
               },
