@@ -145,6 +145,7 @@ function ReadableStreamPipeTo(source, dest, preventClose, preventAbort, preventC
 
   // This is used to keep track of the spec's requirement that we wait for ongoing writes during shutdown.
   let currentWrite;
+  let pendingReads = 0;
 
   return new Promise((resolve, reject) => {
     let abortAlgorithm;
@@ -209,17 +210,28 @@ function ReadableStreamPipeTo(source, dest, preventClose, preventAbort, preventC
           return promiseResolvedWith(true);
         }
         return new Promise((resolveRead, rejectRead) => {
+          pendingReads++;
           ReadableStreamDefaultReaderRead(
             reader,
             {
               chunkSteps: chunk => {
+                pendingReads--;
                 currentWrite = transformPromiseWith(
                   WritableStreamDefaultWriterWrite(writer, chunk), undefined, rethrowAssertionErrorRejection
                 );
+                checkState();
                 resolveRead(false);
               },
-              closeSteps: () => resolveRead(true),
-              errorSteps: rejectRead
+              closeSteps: () => {
+                pendingReads--;
+                checkState();
+                resolveRead(true);
+              },
+              errorSteps: reason => {
+                pendingReads--;
+                checkState();
+                rejectRead(reason);
+              }
             }
           );
         });
@@ -266,7 +278,11 @@ function ReadableStreamPipeTo(source, dest, preventClose, preventAbort, preventC
         destIsOrBecomesErroringOrErrored();
       } else if (sourceState === 'closed') {
         // Closing must be propagated forward
-        sourceIsOrBecomesClosed();
+        // If there are any pending read requests, wait for them to settle first to avoid dropping a chunk.
+        // This is needed because [[PullSteps]] calls ReadableStreamClose() before calling chunkSteps.
+        if (pendingReads === 0) {
+          sourceIsOrBecomesClosed();
+        }
       }
     }
 
