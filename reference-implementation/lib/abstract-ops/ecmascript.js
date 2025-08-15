@@ -17,16 +17,21 @@ exports.CopyDataBlockBytes = (dest, destOffset, src, srcOffset, n) => {
 };
 
 exports.TransferArrayBuffer = O => {
+  assert(!exports.IsSharedArrayBuffer(O));
   assert(!exports.IsDetachedBuffer(O));
   return ArrayBufferPrototypeTransferToFixedLength.call(O);
 };
 
 exports.CanTransferArrayBuffer = O => {
-  return !exports.IsDetachedBuffer(O);
+  return !exports.IsSharedArrayBuffer(O) && !exports.IsDetachedBuffer(O);
 };
 
 exports.IsDetachedBuffer = O => {
   return ArrayBufferPrototypeDetachedGetter.call(O) === true;
+};
+
+exports.IsSharedArrayBuffer = O => {
+  return typeof SharedArrayBuffer !== 'undefined' && O instanceof SharedArrayBuffer;
 };
 
 exports.Call = (F, V, args = []) => {

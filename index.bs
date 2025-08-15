@@ -6827,6 +6827,7 @@ The following abstract operations are a grab-bag of utilities.
 
  1. Assert: |O| [=is an Object=].
  1. Assert: |O| has an \[[ArrayBufferData]] internal slot.
+ 1. If ! [$IsSharedArrayBuffer$](|O|) is true, return false.
  1. If ! [$IsDetachedBuffer$](|O|) is true, return false.
  1. If [$SameValue$](|O|.\[[ArrayBufferDetachKey]], undefined) is false, return false.
  1. Return true.
@@ -6846,6 +6847,7 @@ The following abstract operations are a grab-bag of utilities.
  <dfn abstract-op lt="TransferArrayBuffer"
  id="transfer-array-buffer">TransferArrayBuffer(|O|)</dfn> performs the following steps:
 
+ 1. Assert: ! [$IsSharedArrayBuffer$](|O|) is false.
  1. Assert: ! [$IsDetachedBuffer$](|O|) is false.
  1. Return ? [$ArrayBufferCopyAndDetach$](|O|, undefined, `FIXED-LENGTH`).
     <p class="note">This will throw an exception if |O| has an \[[ArrayBufferDetachKey]]
