@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('assert');
 
-const ArrayBufferPrototypeTransferToFixedLength = ArrayBuffer.prototype.transferToFixedLength;
+const ArrayBufferPrototypeTransfer = ArrayBuffer.prototype.transfer;
 const ArrayBufferPrototypeDetachedGetter = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'detached').get;
 
 exports.typeIsObject = x => (typeof x === 'object' && x !== null) || typeof x === 'function';
@@ -18,7 +18,7 @@ exports.CopyDataBlockBytes = (dest, destOffset, src, srcOffset, n) => {
 
 exports.TransferArrayBuffer = O => {
   assert(!exports.IsDetachedBuffer(O));
-  return ArrayBufferPrototypeTransferToFixedLength.call(O);
+  return ArrayBufferPrototypeTransfer.call(O);
 };
 
 exports.CanTransferArrayBuffer = O => {
