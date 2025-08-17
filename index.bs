@@ -63,6 +63,7 @@ urlPrefix: https://tc39.es/ecma262/; spec: ECMASCRIPT
   text: IsInteger; url: #sec-isinteger
  text: TypeError; url: #sec-native-error-types-used-in-this-standard-typeerror; type: exception
  text: map; url: #sec-array.prototype.map; type: method; for: Array.prototype
+ text: maxByteLength; url: #sec-get-arraybuffer.prototype.maxbytelength; type: attribute; for: ArrayBuffer.prototype
 </pre>
 
 <style>
@@ -1791,8 +1792,8 @@ has the following [=struct/items=]:
 
 : <dfn for="pull-into descriptor">buffer</dfn>
 :: An {{ArrayBuffer}}
-: <dfn for="pull-into descriptor">buffer byte length</dfn>
-:: A positive integer representing the initial byte length of [=pull-into descriptor/buffer=]
+: <dfn for="pull-into descriptor">buffer max byte length</dfn>
+:: A positive integer representing the maximum byte length of [=pull-into descriptor/buffer=]
 : <dfn for="pull-into descriptor">byte offset</dfn>
 :: A nonnegative integer byte offset into the [=pull-into descriptor/buffer=] where the
    [=underlying byte source=] will start writing
@@ -1936,7 +1937,7 @@ counterparts for default controllers, as discussed in [[#rs-abstract-ops-used-by
       <dt>[=pull-into descriptor/buffer=]
       <dd>|buffer|.\[[Value]]
 
-      <dt>[=pull-into descriptor/buffer byte length=]
+      <dt>[=pull-into descriptor/buffer max byte length=]
       <dd>|autoAllocateChunkSize|
 
       <dt>[=pull-into descriptor/byte offset=]
@@ -3626,13 +3627,14 @@ The following abstract operations support the implementation of the
   1. Perform |readIntoRequest|'s [=read-into request/error steps=], given |bufferResult|.\[[Value]].
   1. Return.
  1. Let |buffer| be |bufferResult|.\[[Value]].
+ 1. Let |bufferMaxByteLength| be ! [$GetArrayBufferMaxByteLength$](|buffer|).
  1. Let |pullIntoDescriptor| be a new [=pull-into descriptor=] with
     <dl class="props">
      <dt>[=pull-into descriptor/buffer=]
      <dd>|buffer|
 
-     <dt>[=pull-into descriptor/buffer byte length=]
-     <dd>|buffer|.\[[ArrayBufferByteLength]]
+     <dt>[=pull-into descriptor/buffer max byte length=]
+     <dd>|bufferMaxByteLength|
 
      <dt>[=pull-into descriptor/byte offset=]
      <dd>|byteOffset|
@@ -3813,8 +3815,8 @@ The following abstract operations support the implementation of the
   1. If |view|.\[[ByteLength]] is 0, throw a {{TypeError}} exception.
  1. If |firstDescriptor|'s [=pull-into descriptor/byte offset=] + |firstDescriptor|' [=pull-into
     descriptor/bytes filled=] is not |view|.\[[ByteOffset]], throw a {{RangeError}} exception.
- 1. If |firstDescriptor|'s [=pull-into descriptor/buffer byte length=] is not
-    |view|.\[[ViewedArrayBuffer]].\[[ArrayBufferByteLength]], throw a {{RangeError}} exception.
+ 1. If |firstDescriptor|'s [=pull-into descriptor/buffer max byte length=] is not
+    ! [$GetArrayBufferMaxByteLength$](|view|.\[[ViewedArrayBuffer]]), throw a {{RangeError}} exception.
  1. If |firstDescriptor|'s [=pull-into descriptor/bytes filled=] + |view|.\[[ByteLength]] >
     |firstDescriptor|'s [=pull-into descriptor/byte length=], throw a {{RangeError}} exception.
  1. Let |viewByteLength| be |view|.\[[ByteLength]].
@@ -6886,6 +6888,19 @@ The following abstract operations are a grab-bag of utilities.
  1. If |toIndex| + |count| > |toBuffer|.\[[ArrayBufferByteLength]], return false.
  1. If |fromIndex| + |count| > |fromBuffer|.\[[ArrayBufferByteLength]], return false.
  1. Return true.
+</div>
+
+<div algorithm>
+ <dfn abstract-op lt="GetArrayBufferMaxByteLength">GetArrayBufferMaxByteLength(|O|)</dfn> performs the following steps:
+
+ 1. Assert: |O| [=is an Object=].
+ 1. Assert: |O| has an \[[ArrayBufferData]] internal slot.
+ 1. Assert: ! [$IsSharedArrayBuffer$](|O|) is false.
+ 1. Assert: ! [$IsDetachedBuffer$](|O|) is false.
+ 1. If ! [$IsFixedLengthArrayBuffer$](|O|) is true, return |O|.\[[ArrayBufferByteLength]].
+ 1. Return |O|.\[[ArrayBufferMaxByteLength]].
+
+ <p class="note">This is equivalent to {{ArrayBuffer.prototype/maxByteLength|ArrayBuffer.prototype.maxByteLength}}.
 </div>
 
 <h2 id="other-specs">Using streams in other specifications</h2>

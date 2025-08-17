@@ -1598,7 +1598,7 @@ function ReadableByteStreamControllerPullInto(controller, view, min, readIntoReq
 
   const pullIntoDescriptor = {
     buffer,
-    bufferByteLength: buffer.byteLength,
+    bufferMaxByteLength: buffer.maxByteLength,
     byteOffset,
     byteLength,
     bytesFilled: 0,
@@ -1779,7 +1779,7 @@ function ReadableByteStreamControllerRespondWithNewView(controller, view) {
   if (firstDescriptor.byteOffset + firstDescriptor.bytesFilled !== view.byteOffset) {
     throw new RangeError('The region specified by view does not match byobRequest');
   }
-  if (firstDescriptor.bufferByteLength !== view.buffer.byteLength) {
+  if (firstDescriptor.bufferMaxByteLength !== view.buffer.maxByteLength) {
     throw new RangeError('The buffer of view has different capacity than byobRequest');
   }
   if (firstDescriptor.bytesFilled + view.byteLength > firstDescriptor.byteLength) {
