@@ -1448,7 +1448,7 @@ value: newViewOnSameMemory, done: true }</code> for closed streams. If the strea
  method steps are:
 
  1. If |view|.\[[ByteLength]] is 0, return [=a promise rejected with=] a {{TypeError}} exception.
- 1. If |view|.\[[ViewedArrayBuffer]].\[[ByteLength]] is 0, return [=a promise rejected
+ 1. If |view|.\[[ViewedArrayBuffer]].\[[ArrayBufferByteLength]] is 0, return [=a promise rejected
     with=] a {{TypeError}} exception.
  1. If ! [$IsDetachedBuffer$](|view|.\[[ViewedArrayBuffer]]) is true, return
     [=a promise rejected with=] a {{TypeError}} exception.
@@ -1878,7 +1878,7 @@ has the following [=struct/items=]:
 for="ReadableByteStreamController">enqueue(|chunk|)</dfn> method steps are:
 
  1. If |chunk|.\[[ByteLength]] is 0, throw a {{TypeError}} exception.
- 1. If |chunk|.\[[ViewedArrayBuffer]].\[[ByteLength]] is 0, throw a {{TypeError}}
+ 1. If |chunk|.\[[ViewedArrayBuffer]].\[[ArrayBufferByteLength]] is 0, throw a {{TypeError}}
     exception.
  1. If [=this=].[=ReadableByteStreamController/[[closeRequested]]=] is true, throw a {{TypeError}}
     exception.
@@ -2066,7 +2066,7 @@ following table:
  1. If ! [$IsDetachedBuffer$]([=this=].[=ReadableStreamBYOBRequest/[[view]]=].\[[ArrayBuffer]])
     is true, throw a {{TypeError}} exception.
  1. Assert: [=this=].[=ReadableStreamBYOBRequest/[[view]]=].\[[ByteLength]] &gt; 0.
- 1. Assert: [=this=].[=ReadableStreamBYOBRequest/[[view]]=].\[[ViewedArrayBuffer]].\[[ByteLength]]
+ 1. Assert: [=this=].[=ReadableStreamBYOBRequest/[[view]]=].\[[ViewedArrayBuffer]].\[[ArrayBufferByteLength]]
     &gt; 0.
  1. Perform ?
     [$ReadableByteStreamControllerRespond$]([=this=].[=ReadableStreamBYOBRequest/[[controller]]=],
@@ -3814,7 +3814,7 @@ The following abstract operations support the implementation of the
  1. If |firstDescriptor|'s [=pull-into descriptor/byte offset=] + |firstDescriptor|' [=pull-into
     descriptor/bytes filled=] is not |view|.\[[ByteOffset]], throw a {{RangeError}} exception.
  1. If |firstDescriptor|'s [=pull-into descriptor/buffer byte length=] is not
-    |view|.\[[ViewedArrayBuffer]].\[[ByteLength]], throw a {{RangeError}} exception.
+    |view|.\[[ViewedArrayBuffer]].\[[ArrayBufferByteLength]], throw a {{RangeError}} exception.
  1. If |firstDescriptor|'s [=pull-into descriptor/bytes filled=] + |view|.\[[ByteLength]] >
     |firstDescriptor|'s [=pull-into descriptor/byte length=], throw a {{RangeError}} exception.
  1. Let |viewByteLength| be |view|.\[[ByteLength]].
