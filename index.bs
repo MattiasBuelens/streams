@@ -1322,7 +1322,7 @@ The Web IDL definition for the {{ReadableStreamBYOBReader}} class is given as fo
 interface ReadableStreamBYOBReader {
   constructor(ReadableStream stream);
 
-  Promise<ReadableStreamReadResult> read(ArrayBufferView view, optional ReadableStreamBYOBReaderReadOptions options = {});
+  Promise<ReadableStreamReadResult> read([AllowResizable] ArrayBufferView view, optional ReadableStreamBYOBReaderReadOptions options = {});
   undefined releaseLock();
 };
 ReadableStreamBYOBReader includes ReadableStreamGenericReader;
@@ -1994,7 +1994,7 @@ interface ReadableStreamBYOBRequest {
   readonly attribute ArrayBufferView? view;
 
   undefined respond([EnforceRange] unsigned long long bytesWritten);
-  undefined respondWithNewView(ArrayBufferView view);
+  undefined respondWithNewView([AllowResizable] ArrayBufferView view);
 };
 </xmp>
 
