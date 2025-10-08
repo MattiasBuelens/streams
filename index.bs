@@ -35,7 +35,6 @@ urlPrefix: https://tc39.es/ecma262/; spec: ECMASCRIPT
   text: realm; url: #sec-code-realms
   text: the current Realm; url: #current-realm
   text: the typed array constructors table; url: #table-49
-  text: typed array; url: #sec-typedarray-objects
   url: sec-ecmascript-language-types-bigint-type
    text: is a BigInt
    text: is not a BigInt
@@ -2008,7 +2007,7 @@ following table:
   <td class="non-normative">The parent {{ReadableByteStreamController}} instance
  <tr>
   <td><dfn>\[[view]]</dfn>
-  <td class="non-normative">A [=typed array=] representing the destination region to which the
+  <td class="non-normative">A [=typed array types|typed array=] representing the destination region to which the
   controller can write generated data, or null after the BYOB request has been invalidated.
 </table>
 
