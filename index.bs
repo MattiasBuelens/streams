@@ -6829,12 +6829,12 @@ The following abstract operations are a grab-bag of utilities.
  <dfn abstract-op lt="CloneAsUint8Array">CloneAsUint8Array(|O|)</dfn> performs the following steps:
 
  1. Assert: |O| [=is an Object=].
- 1. Assert: |O| has an \[[ViewedArrayBuffer]] internal slot.
+ 1. Assert: |O| has a \[[ViewedArrayBuffer]] internal slot.
  1. Assert: |O| is not [=BufferSource/detached=].
- 1. Let |buffer| be ? [$CloneArrayBuffer$](|O|.\[[ViewedArrayBuffer]], |O|.\[[ByteOffset]],
-    |O|.\[[ByteLength]], {{%ArrayBuffer%}}).
- 1. Let |array| be ! [$Construct$]({{%Uint8Array%}}, « |buffer| »).
- 1. Return |array|.
+ 1. Let |bytes| be [=get a copy of the bytes held by the buffer source|a copy of the bytes=]
+    held by |O|.
+ 1. Return the result of [=ArrayBufferView/create|creating=] a {{Uint8Array}}
+    from |bytes| in [=the current Realm=].
 </div>
 
 <div algorithm>
