@@ -3774,7 +3774,7 @@ The following abstract operations support the implementation of the
  |bytesWritten|)</dfn> performs the following steps:
 
  1. Let |firstDescriptor| be |controller|.[=ReadableByteStreamController/[[pendingPullIntos]]=][0].
- 1. Assert: ! [$CanTransferArrayBuffer$](|firstDescriptor|'s [=pull-into descriptor/buffer=]) is true.
+ 1. Assert: ! |firstDescriptor|'s [=pull-into descriptor/buffer=] is [=BufferSource/transferable=].
  1. Perform ! [$ReadableByteStreamControllerInvalidateBYOBRequest$](|controller|).
  1. Let |state| be
     |controller|.[=ReadableByteStreamController/[[stream]]=].[=ReadableStream/[[state]]=].
@@ -6815,17 +6815,6 @@ abstract operations are used to implement these "cross-realm transforms".
 <h3 id="misc-abstract-ops">Miscellaneous</h3>
 
 The following abstract operations are a grab-bag of utilities.
-
-<div algorithm>
- <dfn abstract-op lt="CanTransferArrayBuffer"
- id="can-transfer-array-buffer">CanTransferArrayBuffer(|O|)</dfn> performs the following steps:
-
- 1. Assert: |O| [=is an Object=].
- 1. Assert: |O| has an \[[ArrayBufferData]] internal slot.
- 1. If ! [$IsDetachedBuffer$](|O|) is true, return false.
- 1. If [$SameValue$](|O|.\[[ArrayBufferDetachKey]], undefined) is false, return false.
- 1. Return true.
-</div>
 
 <div algorithm>
  <dfn abstract-op lt="IsNonNegativeNumber"
