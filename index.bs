@@ -25,11 +25,6 @@ spec:html; type:dfn; text:port message queue
 
 <pre class="anchors">
 urlPrefix: https://tc39.es/ecma262/; spec: ECMASCRIPT
- type: interface
-  text: ArrayBuffer; url: #sec-arraybuffer-objects
-  text: DataView; url: #sec-dataview-objects
-  text: SharedArrayBuffer; url: #sec-sharedarraybuffer-objects
-  text: Uint8Array; url: #sec-typedarray-objects
  type: dfn
   text: abstract operation; url: #sec-algorithm-conventions-abstract-operations
   text: array; url: #sec-array-objects
