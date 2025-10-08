@@ -1389,12 +1389,12 @@ value: newViewOnSameMemory, done: true }</code> for closed streams. If the strea
   <ul>
    <li>If the chunk does become available, the promise will be fulfilled with an object of the form
    <code highlight="js">{ value: newView, done: false }</code>. In this case, |view| will be
-   [=ArrayBuffer/detached=] and no longer usable, but <code>newView</code> will be a new view (of
+   [=BufferSource/detached=] and no longer usable, but <code>newView</code> will be a new view (of
    the same type) onto the same backing memory region, with the chunk's data written into it.
 
    <li>If the stream becomes closed, the promise will be fulfilled with an object of the form
    <code highlight="js">{ value: newView, done: true }</code>. In this case, |view| will be
-   [=ArrayBuffer/detached=] and no longer usable, but <code>newView</code> will be a new view (of
+   [=BufferSource/detached=] and no longer usable, but <code>newView</code> will be a new view (of
    the same type) onto the same backing memory region, with no modifications, to ensure the memory
    is returned to the caller.
 
@@ -1444,7 +1444,7 @@ value: newViewOnSameMemory, done: true }</code> for closed streams. If the strea
  1. If |view|'s [=BufferSource/byte length=] is 0, return [=a promise rejected with=] a {{TypeError}} exception.
  1. If the [=BufferSource/byte length=] of |view|'s [=underlying buffer=] is 0, return [=a promise rejected
     with=] a {{TypeError}} exception.
- 1. If ! [$IsDetachedBuffer$](|view|'s [=underlying buffer=]) is true, return
+ 1. If |view|'s [=underlying buffer=] is [=BufferSource/detached=], return
     [=a promise rejected with=] a {{TypeError}} exception.
  1. If |options|["{{ReadableStreamBYOBReaderReadOptions/min}}"] is 0, return [=a promise
      rejected with=] a {{TypeError}} exception.
@@ -2057,8 +2057,8 @@ following table:
 
  1. If [=this=].[=ReadableStreamBYOBRequest/[[controller]]=] is undefined, throw a {{TypeError}}
     exception.
- 1. If ! [$IsDetachedBuffer$]([=this=].[=ReadableStreamBYOBRequest/[[view]]=]'s [=underlying buffer=])
-    is true, throw a {{TypeError}} exception.
+ 1. If [=this=].[=ReadableStreamBYOBRequest/[[view]]=]'s [=underlying buffer=]
+    is [=BufferSource/detached=], throw a {{TypeError}} exception.
  1. Assert: [=this=].[=ReadableStreamBYOBRequest/[[view]]=]'s [=BufferSource/byte length=] &gt; 0.
  1. Assert: the [=BufferSource/byte length=] of [=this=].[=ReadableStreamBYOBRequest/[[view]]=]'s
     [=underlying buffer=] &gt; 0.
@@ -2073,7 +2073,7 @@ following table:
 
  1. If [=this=].[=ReadableStreamBYOBRequest/[[controller]]=] is undefined, throw a {{TypeError}}
     exception.
- 1. If ! [$IsDetachedBuffer$](|view|'s [=underlying buffer=]) is true,
+ 1. If |view|'s [=underlying buffer=]) is [=BufferSource/detached=],
     throw a {{TypeError}} exception.
  1. Return ?
     [$ReadableByteStreamControllerRespondWithNewView$]([=this=].[=ReadableStreamBYOBRequest/[[controller]]=],
@@ -3310,14 +3310,14 @@ The following abstract operations support the implementation of the
  1. Let |buffer| be |chunk|'s [=underlying buffer=].
  1. Let |byteOffset| be |chunk|.\[[ByteOffset]].
  1. Let |byteLength| be |chunk|'s [=BufferSource/byte length=].
- 1. If ! [$IsDetachedBuffer$](|buffer|) is true, throw a {{TypeError}} exception.
+ 1. If |buffer| is [=BufferSource/detached=], throw a {{TypeError}} exception.
  1. Let |transferredBuffer| be the result of [=transferring=] |buffer|.
  1. If |controller|.[=ReadableByteStreamController/[[pendingPullIntos]]=] is not
     [=list/is empty|empty=],
   1. Let |firstPendingPullInto| be
      |controller|.[=ReadableByteStreamController/[[pendingPullIntos]]=][0].
-  1. If ! [$IsDetachedBuffer$](|firstPendingPullInto|'s [=pull-into descriptor/buffer=])
-     is true, throw a {{TypeError}} exception.
+  1. If |firstPendingPullInto|'s [=pull-into descriptor/buffer=]
+     is [=BufferSource/detached=], throw a {{TypeError}} exception.
   1. Perform ! [$ReadableByteStreamControllerInvalidateBYOBRequest$](|controller|).
   1. Set |firstPendingPullInto|'s [=pull-into descriptor/buffer=] to the result of
      [=transferring=] |firstPendingPullInto|'s [=pull-into descriptor/buffer=].
@@ -3433,7 +3433,7 @@ The following abstract operations support the implementation of the
     |maxBytesToCopy|.
  1. Let |totalBytesToCopyRemaining| be |maxBytesToCopy|.
  1. Let |ready| be false.
- 1. Assert: ! [$IsDetachedBuffer$](|pullIntoDescriptor|'s [=pull-into descriptor/buffer=]) is false.
+ 1. Assert: |pullIntoDescriptor|'s [=pull-into descriptor/buffer=] is not [=BufferSource/detached=].
  1. Assert: |pullIntoDescriptor|'s [=pull-into descriptor/bytes filled=] < |pullIntoDescriptor|'s
     [=pull-into descriptor/minimum fill=].
  1. Let |remainderBytes| be the remainder after dividing |maxBytesFilled| by |pullIntoDescriptor|'s
@@ -3796,7 +3796,7 @@ The following abstract operations support the implementation of the
 
  1. Assert: |controller|.[=ReadableByteStreamController/[[pendingPullIntos]]=] is not [=list/is
     empty|empty=].
- 1. Assert: ! [$IsDetachedBuffer$](|view|'s [=underlying buffer=]) is false.
+ 1. Assert: |view|'s [=underlying buffer=] is not [=BufferSource/detached=].
  1. Let |firstDescriptor| be |controller|.[=ReadableByteStreamController/[[pendingPullIntos]]=][0].
  1. Let |state| be
     |controller|.[=ReadableByteStreamController/[[stream]]=].[=ReadableStream/[[state]]=].
@@ -6830,7 +6830,7 @@ The following abstract operations are a grab-bag of utilities.
 
  1. Assert: |O| [=is an Object=].
  1. Assert: |O| has an \[[ViewedArrayBuffer]] internal slot.
- 1. Assert: ! [$IsDetachedBuffer$](|O|.\[[ViewedArrayBuffer]]) is false.
+ 1. Assert: |O| is not [=BufferSource/detached=].
  1. Let |buffer| be ? [$CloneArrayBuffer$](|O|.\[[ViewedArrayBuffer]], |O|.\[[ByteOffset]],
     |O|.\[[ByteLength]], {{%ArrayBuffer%}}).
  1. Let |array| be ! [$Construct$]({{%Uint8Array%}}, « |buffer| »).
@@ -6853,8 +6853,8 @@ The following abstract operations are a grab-bag of utilities.
  1. Assert: |fromBuffer| [=is an Object=].
  1. Assert: |fromBuffer| has an \[[ArrayBufferData]] internal slot.
  1. If |toBuffer| is |fromBuffer|, return false.
- 1. If ! [$IsDetachedBuffer$](|toBuffer|) is true, return false.
- 1. If ! [$IsDetachedBuffer$](|fromBuffer|) is true, return false.
+ 1. If |toBuffer| is [=BufferSource/detached=], return false.
+ 1. If |fromBuffer| is [=BufferSource/detached=], return false.
  1. If |toIndex| + |count| > |toBuffer|'s [=BufferSource/byte length=], return false.
  1. If |fromIndex| + |count| > |fromBuffer|'s [=BufferSource/byte length=], return false.
  1. Return true.
