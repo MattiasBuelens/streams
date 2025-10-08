@@ -1443,7 +1443,7 @@ value: newViewOnSameMemory, done: true }</code> for closed streams. If the strea
  method steps are:
 
  1. If |view|.\[[ByteLength]] is 0, return [=a promise rejected with=] a {{TypeError}} exception.
- 1. If |view|.\[[ViewedArrayBuffer]].\[[ArrayBufferByteLength]] is 0, return [=a promise rejected
+ 1. If |view|.\[[ViewedArrayBuffer]]'s [=BufferSource/byte length=] is 0, return [=a promise rejected
     with=] a {{TypeError}} exception.
  1. If ! [$IsDetachedBuffer$](|view|.\[[ViewedArrayBuffer]]) is true, return
     [=a promise rejected with=] a {{TypeError}} exception.
@@ -1873,7 +1873,7 @@ has the following [=struct/items=]:
 for="ReadableByteStreamController">enqueue(|chunk|)</dfn> method steps are:
 
  1. If |chunk|.\[[ByteLength]] is 0, throw a {{TypeError}} exception.
- 1. If |chunk|.\[[ViewedArrayBuffer]].\[[ArrayBufferByteLength]] is 0, throw a {{TypeError}}
+ 1. If |chunk|.\[[ViewedArrayBuffer]]'s [=BufferSource/byte length=] is 0, throw a {{TypeError}}
     exception.
  1. If [=this=].[=ReadableByteStreamController/[[closeRequested]]=] is true, throw a {{TypeError}}
     exception.
@@ -2061,7 +2061,7 @@ following table:
  1. If ! [$IsDetachedBuffer$]([=this=].[=ReadableStreamBYOBRequest/[[view]]=].\[[ArrayBuffer]])
     is true, throw a {{TypeError}} exception.
  1. Assert: [=this=].[=ReadableStreamBYOBRequest/[[view]]=].\[[ByteLength]] &gt; 0.
- 1. Assert: [=this=].[=ReadableStreamBYOBRequest/[[view]]=].\[[ViewedArrayBuffer]].\[[ArrayBufferByteLength]]
+ 1. Assert: [=this=].[=ReadableStreamBYOBRequest/[[view]]=].\[[ViewedArrayBuffer]]'s [=BufferSource/byte length=]
     &gt; 0.
  1. Perform ?
     [$ReadableByteStreamControllerRespond$]([=this=].[=ReadableStreamBYOBRequest/[[controller]]=],
@@ -3627,7 +3627,7 @@ The following abstract operations support the implementation of the
      <dd>|buffer|
 
      <dt>[=pull-into descriptor/buffer byte length=]
-     <dd>|buffer|.\[[ArrayBufferByteLength]]
+     <dd>|buffer|'s [=BufferSource/byte length=]
 
      <dt>[=pull-into descriptor/byte offset=]
      <dd>|byteOffset|
@@ -3809,7 +3809,7 @@ The following abstract operations support the implementation of the
  1. If |firstDescriptor|'s [=pull-into descriptor/byte offset=] + |firstDescriptor|' [=pull-into
     descriptor/bytes filled=] is not |view|.\[[ByteOffset]], throw a {{RangeError}} exception.
  1. If |firstDescriptor|'s [=pull-into descriptor/buffer byte length=] is not
-    |view|.\[[ViewedArrayBuffer]].\[[ArrayBufferByteLength]], throw a {{RangeError}} exception.
+    |view|.\[[ViewedArrayBuffer]]'s [=BufferSource/byte length=], throw a {{RangeError}} exception.
  1. If |firstDescriptor|'s [=pull-into descriptor/bytes filled=] + |view|.\[[ByteLength]] >
     |firstDescriptor|'s [=pull-into descriptor/byte length=], throw a {{RangeError}} exception.
  1. Let |viewByteLength| be |view|.\[[ByteLength]].
@@ -6856,8 +6856,8 @@ The following abstract operations are a grab-bag of utilities.
  1. If |toBuffer| is |fromBuffer|, return false.
  1. If ! [$IsDetachedBuffer$](|toBuffer|) is true, return false.
  1. If ! [$IsDetachedBuffer$](|fromBuffer|) is true, return false.
- 1. If |toIndex| + |count| > |toBuffer|.\[[ArrayBufferByteLength]], return false.
- 1. If |fromIndex| + |count| > |fromBuffer|.\[[ArrayBufferByteLength]], return false.
+ 1. If |toIndex| + |count| > |toBuffer|'s [=BufferSource/byte length=], return false.
+ 1. If |fromIndex| + |count| > |fromBuffer|'s [=BufferSource/byte length=], return false.
  1. Return true.
 </div>
 
