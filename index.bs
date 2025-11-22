@@ -3374,7 +3374,7 @@ The following abstract operations support the implementation of the
  lt="ReadableByteStreamControllerEnqueueClonedChunkToQueue">ReadableByteStreamControllerEnqueueClonedChunkToQueue(|controller|,
  |buffer|, |byteOffset|, |byteLength|)</dfn> performs the following steps:
 
- 1. Let |cloneResult| be [$CloneArrayBuffer$](|buffer|, |byteOffset|, |byteLength|, {{%ArrayBuffer%}}).
+ 1. Let |cloneResult| be [$CloneArrayBuffer$](|buffer|, |byteOffset|, |byteLength|).
  1. If |cloneResult| is an abrupt completion,
   1. Perform ! [$ReadableByteStreamControllerError$](|controller|, |cloneResult|.\[[Value]]).
   1. Return |cloneResult|.
