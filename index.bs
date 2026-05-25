@@ -2285,7 +2285,8 @@ The following abstract operations operate on {{ReadableStream}} instances at a h
        |dest|.[=WritableStream/[[storedError]]=].
     1. Otherwise, [=shutdown=] with |dest|.[=WritableStream/[[storedError]]=].
    1. <strong>Closing must be propagated forward:</strong> if |source|.[=ReadableStream/[[state]]=]
-      is or becomes "`closed`", then
+      is or becomes "`closed`" and there are no pending reads that still need to be written
+      to |dest|, then
     1. If |preventClose| is false, [=shutdown with an action=] of !
        [$WritableStreamDefaultWriterCloseWithErrorPropagation$](|writer|).
     1. Otherwise, [=shutdown=].
