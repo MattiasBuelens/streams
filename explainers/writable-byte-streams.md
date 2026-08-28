@@ -327,7 +327,39 @@ await byteReadable.pipeTo(byteWritable);
 
 Internally this becomes `requestBuffer()` → BYOB `read(view)` → `write(view)`, so a single set of
 buffers circulates between the two underlying implementations for the life of the pipe, with no
-copies and, once warm, no allocation.
+copies and, once warm, no allocation. Written out, the loop is short:
+
+```javascript
+async function pipeTo(readable, writable) {
+  const reader = readable.getReader({ mode: "byob" });
+  const writer = writable.getWriter({ mode: "byob" });
+
+  while (true) {
+    // Waiting for a buffer is the backpressure: the destination hands them back as it drains.
+    const buffer = await writer.requestBuffer();
+
+    const { value, done } = await reader.read(buffer);
+    if (done) {
+      break;
+    }
+
+    // `value` covers only the bytes that were read, but the whole buffer travels back to the
+    // sink — and from there to the queue that the next requestBuffer() draws from.
+    writer.write(value).catch(() => {});
+  }
+
+  await writer.close();
+}
+```
+
+This is the producer loop from the first example with `reader.read()` in place of the fill step, and
+it never allocates: every buffer it touches came from the destination. Not awaiting each `write()`
+is deliberate — `requestBuffer()` is already the backpressure, so how many buffers the sink lends is
+what sets the depth of the pipeline. With one, the source and the sink take turns; with two, one is
+being filled while the other is being drained.
+
+Error propagation in both directions, `preventClose`/`preventAbort`/`preventCancel`, and the abort
+signal are all elided above; none of them change.
 
 `pipeTo()` already [chooses its reader at the user agent's
 discretion](https://streams.spec.whatwg.org/#readable-stream-pipe-to) when the source is a byte
