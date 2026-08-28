@@ -73,7 +73,7 @@ underlying source and the producer are both *origins*.
 | `new ReadableStream({ type: "bytes" })` | `new WritableStream({ type: "bytes" })` |
 | `stream.getReader({ mode: "byob" })` | `stream.getWriter({ mode: "byob" })` |
 | **`ReadableStreamBYOBReader`** (destination) | **`WritableByteStreamController`** (destination) |
-| `reader.read(view): Promise<View>`<br>Lends a buffer; returns the transferred view when done reading. | `sink.write(view): Promise<View \| undefined \| null>`<br>Receives a buffer; returns the (transferred) view when done writing. `undefined` means "take the original back"; `null` means "I kept it". |
+| `reader.read(view): Promise<View>`<br>Lends a buffer; returns the transferred view when done reading. | `sink.write(view): Promise<undefined>`<br>Receives a buffer; when the promise settles the buffer goes back, unless the sink took it by detaching it. |
 | `reader.cancel(reason)` | `controller.signal`, `sink.abort(reason)` |
 | **`ReadableByteStreamController`** (origin) | **`WritableStreamBYOBWriter`** (origin) |
 | `source.pull()`<br>Called when more data is needed. | `writer.ready`<br>Resolves when more data is desired. |
@@ -123,7 +123,7 @@ const writableStream = new WritableStream({
 
   async write(view, controller) {
     await sendSomewhere(view);
-    // Returning undefined hands this buffer back to the producer.
+    // Not having detached `view` hands this buffer back to the producer.
   },
 
   // Optional: let the stream allocate buffers when the sink does not supply any.
@@ -171,9 +171,8 @@ dictionary UnderlyingSink {
 
 enum WritableStreamType { "bytes" };
 
-// For byte sinks, `chunk` is a Uint8Array and the promise may fulfill with an ArrayBufferView
-// (hand this buffer back), undefined (hand the original back), or null (nothing comes back).
-callback UnderlyingSinkWriteCallback = Promise<any> (any chunk, WritableStreamController controller);
+// Unchanged: for byte sinks `chunk` is a Uint8Array, and the fulfillment value is still ignored.
+callback UnderlyingSinkWriteCallback = Promise<undefined> (any chunk, WritableStreamController controller);
 
 typedef (WritableStreamDefaultController or WritableByteStreamController) WritableStreamController;
 
@@ -235,15 +234,19 @@ actually enforce.
     reason.
 2.  **The sink owns the view for the duration of its `write()` call.** It receives a fresh
     `Uint8Array` over the transferred memory, valid until the promise it returns settles.
-3.  **The promise's fulfillment value says where the buffer goes.**
-    *   `undefined` — the stream takes the original buffer back into the free-buffer queue. The view
-        must not have been detached; if it has, that is a `TypeError` that errors the stream, in the
-        same way that `byobRequest.respond()` refuses a detached view.
-    *   an `ArrayBufferView` — that view's buffer is transferred out of the sink and queued instead.
-        This is the `respondWithNewView()` analogue: it covers a sink that kept the written buffer
-        and wants to lend different memory, or one that wants to hand back a different region.
-    *   `null` — nothing comes back. This is the honest answer for a sink that transferred the chunk
-        onwards, to a worker or to a platform API that takes ownership.
+3.  **The sink keeps the buffer by taking it; otherwise it goes back.** When the sink's promise
+    settles, the stream looks at the view it handed over. Still attached — the sink read what it
+    needed and is done — and the buffer returns to the free-buffer queue. Detached, because the sink
+    transferred it onwards with `ArrayBuffer.prototype.transfer()`, posted it to a worker, or wrote
+    it to a downstream byte stream — and nothing comes back, because there is nothing left to come
+    back. Keeping a buffer is an act, not an annotation: a sink that wants to hold onto the bytes
+    must take ownership of them, which is the same thing the readable side asks of a source that
+    wants to keep a `byobRequest` view.
+
+    A sink that wants to hand back *different* memory — because it kept what it was given, or is
+    lending out of a pool — calls `controller.recycle(view)`, which is the same call it would use to
+    seed the queue in `start()`. Nothing is encoded in the promise's value; `write()` keeps the
+    signature and the ignored fulfillment value it has today.
 4.  **`writer.requestBuffer(minSize)`** fulfills with a `Uint8Array` over the first queued free
     buffer of at least `minSize` bytes, transferred to the producer. If none is available it
     allocates `autoAllocateChunkSize` bytes when the sink asked for that, and otherwise waits — the
@@ -306,7 +309,7 @@ function makeRingBufferStream(ring) {
 
     async write(view, controller) {
       await ring.commit(view);      // the bytes are already in the right place; nothing is copied
-      return undefined;             // slot goes back into rotation
+      // `view` is left attached, so the slot goes back into rotation.
     }
   });
 }
@@ -388,8 +391,8 @@ purpose](https://streams.spec.whatwg.org/#dom-transformer-readabletype) too, and
 in independently:
 
 *   `writableType: "bytes"` makes the writable half a writable byte stream. `transform(chunk,
-    controller)` owns `chunk` for the duration of the call, and its promise's fulfillment value
-    decides where that buffer goes, under the same three-way rule as a sink's `write()`.
+    controller)` owns `chunk` for the duration of the call, and keeps it or gives it back by the
+    same rule 3 that governs a sink's `write()`: detach it to keep it, leave it alone to return it.
 *   `readableType: "bytes"` makes the readable half a readable byte stream, so
     `controller.byobRequest` is available and `controller.enqueue(view)` transfers.
 
@@ -410,13 +413,12 @@ const inPlaceCipher = new TransformStream({
       chunk[i] ^= 0x5a;
     }
     controller.enqueue(chunk);   // transfers; the buffer travels downstream
-    return null;                 // ...so nothing goes back to the writable side's queue
   }
 });
 ```
 
-`enqueue()` transfers the buffer to the readable side, so it is no longer available to hand back to
-the producer — which is exactly why `transform()` returns `null` here. That is correct but
+`enqueue()` transfers the buffer to the readable side, which detaches it — so rule 3 finds nothing
+to hand back to the producer, with no ceremony required of the transformer. That is correct but
 one-directional: the buffer left the writable side's rotation, and unless something replenishes it,
 the producer's next `requestBuffer()` has to allocate. (`enqueue()` is the right call here because
 the readable side is still holding its own buffers; that changes below.)
@@ -453,10 +455,9 @@ const identity = new TransformStream({
     if (byobRequest && byobRequest.view.byteLength >= chunk.byteLength) {
       byobRequest.view.set(chunk, 0);
       byobRequest.respond(chunk.byteLength);
-      return undefined;            // `chunk` was only read from, so it goes back to the producer
+      return;                      // `chunk` was only read from, so it goes back to the producer
     }
-    controller.enqueue(chunk);
-    return null;
+    controller.enqueue(chunk);     // ...whereas this takes it away, and nothing goes back
   }
 });
 ```
@@ -648,9 +649,18 @@ no longer yours".
     the strict dual, and is a good description of the internal machinery, but it puts a synchronous
     request/respond protocol in front of ordinary producer code, which is the half of the API that
     should look like `read()`.
-*   **A `recycle()`-only design with no return value from `write()`**, requiring every sink to
-    explicitly hand each buffer back. More uniform, but it makes the common case — a sink that reads
-    the chunk and is done — into boilerplate, and makes forgetting the call a silent leak.
+*   **The sink's `write()` promise fulfilling with the buffer to hand back** — an `ArrayBufferView`
+    to lend that one, `undefined` to lend the original, `null` to keep it. This was the earlier
+    shape of rule 3, and it fails on the distinction it needs most: `undefined` and `null` have to
+    mean opposite things, while `undefined` is what a sink produces by accident. An `async write()`
+    that falls off the end, a bare `return;`, `map.get(key)`, `this.#pool?.take(view)` — all
+    `undefined`, all silently meaning "hand the original back", with the deliberate answer one
+    keystroke away and inverted. It also forces `UnderlyingSinkWriteCallback` to become
+    `Promise<any>` with the three cases switched on in prose. Detachment already carries the
+    signal unambiguously, so rule 3 reads it there instead.
+*   **A `recycle()`-only design with no automatic hand-back**, requiring every sink to explicitly
+    return each buffer. More uniform, but it makes the common case — a sink that reads the chunk and
+    is done — into boilerplate, and makes forgetting the call a silent leak.
 *   **Transfer without a return path**, i.e. `type: "owning"` from the [transferring-ownership
     streams explainer](./streams-for-raw-video.md). That solves ownership but not reuse: the
     producer still allocates every chunk. The two designs agree on transferring at hand-off, and a
@@ -679,10 +689,11 @@ no longer yours".
     empty pool means "allocate", which is how Pipelines behaves; without it, an empty pool means
     "wait", which is how a fixed ring behaves. If those are two settings of one control rather than
     two features, that should be visible in the API.
-*   **The strict-versus-lenient detach check.** Rule 3 makes returning `undefined` after detaching
-    the view an error, which catches a real class of sink bug at the cost of requiring sinks to be
-    explicit with `null`. The lenient alternative — silently recycle nothing — is friendlier and
-    less diagnosable.
+*   **Whether keeping a buffer should be diagnosable.** Rule 3 is silent by construction: a sink
+    that detaches simply gets nothing back. That is what makes pass-through sinks work without
+    ceremony, but it also means a sink that leaks the pool one buffer at a time looks exactly like
+    one that is behaving. Whether that wants a signal — and what kind, given that the failure only
+    shows up later as a producer waiting on `requestBuffer()` — is open.
 *   **Whether `pipeTo()` opts in automatically** when both ends are byte streams. It is a pure win
     for allocation, and `pipeTo()` already picks its reader at the user agent's discretion for byte
     sources — but it does change which buffers the underlying source is handed, which is observable.
