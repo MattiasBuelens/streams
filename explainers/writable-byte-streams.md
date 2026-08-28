@@ -513,7 +513,8 @@ line: whether the destination is allowed to hold the buffer past the call that g
 
 ### Where the language can enforce a borrow
 
-Rust's asynchronous write traits take a borrowed slice:
+Rust's asynchronous write traits, [`tokio::io::AsyncWrite`](https://docs.rs/tokio/latest/tokio/io/trait.AsyncWrite.html)
+and its `futures::io` counterpart, take a borrowed slice:
 
 ```rust
 fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8])
@@ -538,7 +539,8 @@ when it ended, and — if the sink transfers the chunk — no return.
 ### Where it cannot: transfer and hand back
 
 The interesting case is what happens when a system moves to *completion-based* I/O, where the kernel
-holds the buffer past the call. Rust's answer, in `tokio-uring`, is to stop borrowing entirely:
+holds the buffer past the call. Rust's answer, in
+[`tokio-uring`](https://github.com/tokio-rs/tokio-uring), is to stop borrowing entirely:
 
 ```rust
 let (res, buf) = file.read_at(buf, 0).await;
@@ -548,9 +550,11 @@ as the README puts it, "the buffer is passed by ownership and submitted to the k
 operation completes, we get the buffer back."
 
 That is rule 1 and rule 3 of this proposal, arrived at independently under the same constraint.
-Node's `fs.write()` reaches the same place from a different direction — its callback is
-`(err, bytesWritten, buffer)`, handing the buffer back alongside the result, as does
-`filehandle.write()` with its `{ bytesWritten, buffer }`.
+Node's [`fs.write()`](https://nodejs.org/api/fs.html#fswritefd-buffer-offset-length-position-callback)
+reaches the same place from a different direction — its callback is `(err, bytesWritten, buffer)`,
+handing the buffer back alongside the result, as does
+[`filehandle.write()`](https://nodejs.org/api/fs.html#filehandlewritebuffer-offset-length-position)
+with its `{ bytesWritten, buffer }`.
 
 The convergence is not a coincidence, and it is the strongest argument that this shape is right for
 streams. A writable stream is *always* in the completion-based situation: the sink is asynchronous
@@ -564,8 +568,8 @@ platform is missing:
 
 | | Destination brings the buffer | Origin brings the buffer |
 | --- | --- | --- |
-| **Reading**<br>(origin = source) | `reader.read(view)` — web BYOB; `Read`/`AsyncRead` in Rust | `AsyncBufRead::poll_fill_buf` + `consume` in Rust; `PipeReader.ReadAsync` + `AdvanceTo` in .NET — **no web equivalent** |
-| **Writing**<br>(destination = sink) | `PipeWriter.GetMemory` + `Advance` in .NET; `bufio.Writer.AvailableBuffer` in Go; `GPUBuffer.mapAsync` + `getMappedRange` on the web — **no web streams equivalent** | `writer.write(chunk)` and its equivalents everywhere; the buffer comes back only in completion-based APIs |
+| **Reading**<br>(origin = source) | `reader.read(view)` — web BYOB; `Read`/`AsyncRead` in Rust | [`AsyncBufRead::poll_fill_buf`](https://docs.rs/futures/latest/futures/io/trait.AsyncBufRead.html) + `consume` in Rust ([`BufRead`](https://doc.rust-lang.org/std/io/trait.BufRead.html) synchronously); [`PipeReader.ReadAsync`](https://learn.microsoft.com/en-us/dotnet/standard/io/pipelines) + `AdvanceTo` in .NET — **no web equivalent** |
+| **Writing**<br>(destination = sink) | [`PipeWriter.GetMemory`](https://learn.microsoft.com/en-us/dotnet/api/system.io.pipelines.pipewriter) + `Advance` in .NET; [`bufio.Writer.AvailableBuffer`](https://pkg.go.dev/bufio#Writer.AvailableBuffer) in Go; [`GPUBuffer.mapAsync`](https://developer.mozilla.org/en-US/docs/Web/API/GPUBuffer/getMappedRange) + `getMappedRange` on the web — **no web streams equivalent** | `writer.write(chunk)` and its equivalents everywhere; the buffer comes back only in completion-based APIs |
 
 The destination-lends-on-write quadrant — PUTB — is the one this explainer is proposing, and the two
 ecosystems that have it landed on very nearly the API proposed here. Go's `bufio.Writer`, since 1.18:
@@ -575,7 +579,8 @@ ecosystems that have it landed on very nearly the API proposed here. Go's `bufio
 
 which is `requestBuffer()` followed by `write()`, in those words. Go adds that the buffer "is only
 valid until the next write operation on b" — an unenforced borrow, the same kind of contract this
-design replaces with an actual transfer. .NET's `System.IO.Pipelines` splits
+design replaces with an actual transfer. .NET's
+[`System.IO.Pipelines`](https://learn.microsoft.com/en-us/dotnet/standard/io/pipelines) splits
 it three ways — `GetMemory(sizeHint)` to borrow, `Advance(n)` to say how much was filled,
 `FlushAsync()` to hand it on — and its `sizeHint` is a minimum, not an exact size, which is the
 answer to one of the open questions below: `requestBuffer(minSize)` should be free to return a
@@ -586,7 +591,8 @@ real sink still copies out of it. The case where the true destination lends — 
 reads from, a page mapped for another process — is served on the web today mainly by
 `GPUBuffer.mapAsync()`, and it is worth noticing how closely that already resembles what is proposed
 here: the buffer comes from the destination, JavaScript fills it through `getMappedRange()`, and
-handing it back with `unmap()` **detaches** the views, for exactly the reason this design detaches
+handing it back with [`unmap()`](https://developer.mozilla.org/en-US/docs/Web/API/GPUBuffer/unmap)
+**detaches** the views, for exactly the reason this design detaches
 them — the memory has to go back to the party that owns it, and nothing on the JavaScript side may
 still be pointing at it.
 
@@ -600,7 +606,8 @@ running out of buffers *is* the backpressure signal.
 
 That follows from wanting a finite pool. When the sink owns the memory — a ring with N slots — the
 supply of buffers is not something the stream can grow its way out of, and a producer that has to
-wait for a slot is not experiencing an error but the whole point. io_uring's provided-buffer rings
+wait for a slot is not experiencing an error but the whole point. io_uring's
+[provided-buffer rings](https://man7.org/linux/man-pages/man7/io_uring_provided_buffers.7.html)
 work the same way: the application registers a pool, the kernel draws from it, and an operation
 fails when the pool is empty. A stream with `autoAllocateChunkSize` set behaves like Pipelines
 instead, allocating rather than waiting, which suggests the two models are settings of one dial
@@ -609,8 +616,11 @@ rather than a fork in the design.
 ### Reference counting, which JavaScript cannot have
 
 The other major family of solutions does not transfer at all: it counts references and pools.
-Netty's `ByteBuf` is reference-counted with an explicit `release()` and a pooled allocator, .NET has
-`ArrayPool<T>.Rent`/`Return`, Rust has `bytes::Bytes`, Go has `sync.Pool`. These are in many ways
+Netty's `ByteBuf` is [reference-counted](https://netty.io/wiki/reference-counted-objects.html) with
+an explicit `release()` and a pooled allocator, .NET has
+[`ArrayPool<T>`](https://learn.microsoft.com/en-us/dotnet/api/system.buffers.arraypool-1)`.Rent`/`Return`,
+Rust has [`bytes::Bytes`](https://docs.rs/bytes/latest/bytes/struct.Bytes.html), Go has
+[`sync.Pool`](https://pkg.go.dev/sync#Pool). These are in many ways
 nicer than transferring — several parties can hold a buffer, and it returns to its pool when the
 last one lets go.
 
