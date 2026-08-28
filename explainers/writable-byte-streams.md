@@ -473,14 +473,134 @@ below.
     bytes the sink is in the middle of reading.
 
 
+## Prior art in other ecosystems
+
+None of this is new. Every I/O ecosystem that cares about allocation has had to answer the same
+question — *who owns these bytes while the write is in flight?* — and the answers divide along one
+line: whether the destination is allowed to hold the buffer past the call that gave it.
+
+### Where the language can enforce a borrow
+
+Rust's asynchronous write traits take a borrowed slice:
+
+```rust
+fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8])
+    -> Poll<io::Result<usize>>;
+```
+
+There is no return path, and none is needed: the borrow ends when `poll_write` returns, and the
+compiler guarantees the caller cannot touch `buf` before then. This is the same contract the Streams
+Standard states informally today — "do not mutate the chunk until the promise settles" — except
+statically enforced.
+
+It also comes with the same catch, and it is worth being precise about it. Because the borrow ends
+at return, an implementation that needs the bytes *later* — to queue them for a syscall, hand them
+to another thread — cannot keep the slice. It must copy. Borrowing does not eliminate the copy; it
+just makes the ownership question answerable at compile time.
+
+Web streams cannot borrow this way regardless. `write()` is asynchronous by construction, and the
+chunk sits in a queue with a sink that will not look at it until much later; there is no scope for
+the borrow to end at. What the standard has today is a borrow with no enforcement, no way to tell
+when it ended, and — if the sink transfers the chunk — no return.
+
+### Where it cannot: transfer and hand back
+
+The interesting case is what happens when a system moves to *completion-based* I/O, where the kernel
+holds the buffer past the call. Rust's answer, in `tokio-uring`, is to stop borrowing entirely:
+
+```rust
+let (res, buf) = file.read_at(buf, 0).await;
+```
+
+as the README puts it, "the buffer is passed by ownership and submitted to the kernel. When the
+operation completes, we get the buffer back."
+
+That is rule 1 and rule 3 of this proposal, arrived at independently under the same constraint.
+Node's `fs.write()` reaches the same place from a different direction — its callback is
+`(err, bytesWritten, buffer)`, handing the buffer back alongside the result, as does
+`filehandle.write()` with its `{ bytesWritten, buffer }`.
+
+The convergence is not a coincidence, and it is the strongest argument that this shape is right for
+streams. A writable stream is *always* in the completion-based situation: the sink is asynchronous
+and the queue is real. Pass ownership in, get it back on completion, is what everyone who cannot
+borrow ends up with.
+
+### Who lends the buffer
+
+The other axis is which end supplies the memory. Laying out the four combinations shows what the web
+platform is missing:
+
+| | Destination brings the buffer | Origin brings the buffer |
+| --- | --- | --- |
+| **Reading**<br>(origin = source) | `reader.read(view)` — web BYOB; `Read`/`AsyncRead` in Rust | `AsyncBufRead::poll_fill_buf` + `consume` in Rust; `PipeReader.ReadAsync` + `AdvanceTo` in .NET — **no web equivalent** |
+| **Writing**<br>(destination = sink) | `PipeWriter.GetMemory` + `Advance` in .NET; `bufio.Writer.AvailableBuffer` in Go; `GPUBuffer.mapAsync` + `getMappedRange` on the web — **no web streams equivalent** | `writer.write(chunk)` and its equivalents everywhere; the buffer comes back only in completion-based APIs |
+
+The destination-lends-on-write quadrant — PUTB — is the one this explainer is proposing, and the two
+ecosystems that have it landed on very nearly the API proposed here. Go's `bufio.Writer`, since 1.18:
+
+> AvailableBuffer returns an empty buffer with b.Available() capacity. This buffer is intended to be
+> appended to and passed to an immediately succeeding Writer.Write call.
+
+which is `requestBuffer()` followed by `write()`, in those words. Go adds that the buffer "is only
+valid until the next write operation on b" — an unenforced borrow, the same kind of contract this
+design replaces with an actual transfer. .NET's `System.IO.Pipelines` splits
+it three ways — `GetMemory(sizeHint)` to borrow, `Advance(n)` to say how much was filled,
+`FlushAsync()` to hand it on — and its `sizeHint` is a minimum, not an exact size, which is the
+answer to one of the open questions below: `requestBuffer(minSize)` should be free to return a
+larger buffer.
+
+Both of those lend the *buffering layer's* memory rather than the ultimate destination's, so the
+real sink still copies out of it. The case where the true destination lends — a ring the device
+reads from, a page mapped for another process — is served on the web today mainly by
+`GPUBuffer.mapAsync()`, and it is worth noticing how closely that already resembles what is proposed
+here: the buffer comes from the destination, JavaScript fills it through `getMappedRange()`, and
+handing it back with `unmap()` **detaches** the views, for exactly the reason this design detaches
+them — the memory has to go back to the party that owns it, and nothing on the JavaScript side may
+still be pointing at it.
+
+### Where backpressure sits
+
+The two lending designs disagree about this, in a way worth deciding deliberately rather than by
+accident. Pipelines makes `GetMemory()` synchronous and non-blocking — the pipe simply allocates
+more — and puts the waiting in `FlushAsync()`. Go's `AvailableBuffer()` is likewise synchronous, and
+returns however much room is left. This design instead makes `requestBuffer()` the await point, so
+running out of buffers *is* the backpressure signal.
+
+That follows from wanting a finite pool. When the sink owns the memory — a ring with N slots — the
+supply of buffers is not something the stream can grow its way out of, and a producer that has to
+wait for a slot is not experiencing an error but the whole point. io_uring's provided-buffer rings
+work the same way: the application registers a pool, the kernel draws from it, and an operation
+fails when the pool is empty. A stream with `autoAllocateChunkSize` set behaves like Pipelines
+instead, allocating rather than waiting, which suggests the two models are settings of one dial
+rather than a fork in the design.
+
+### Reference counting, which JavaScript cannot have
+
+The other major family of solutions does not transfer at all: it counts references and pools.
+Netty's `ByteBuf` is reference-counted with an explicit `release()` and a pooled allocator, .NET has
+`ArrayPool<T>.Rent`/`Return`, Rust has `bytes::Bytes`, Go has `sync.Pool`. These are in many ways
+nicer than transferring — several parties can hold a buffer, and it returns to its pool when the
+last one lets go.
+
+They all depend on deterministic release, which JavaScript does not offer: there are no destructors,
+no scope-based disposal for `ArrayBuffer`s, and `FinalizationRegistry` runs whenever it likes. A
+recycling scheme built on it would return buffers to the pool at unpredictable times, which is the
+one thing a fixed-size pool cannot tolerate. Transferring is not this design's preference over
+reference counting so much as the only primitive the language actually gives us for saying "this is
+no longer yours".
+
+
 ## Alternatives
 
 *   **`write()` fulfilling with the recycled buffer** (`writer.write(view): Promise<View>`), so one
     call both hands a buffer over and returns the next one. This is the tightest mirror of
-    `reader.read(view)` and reads well in a loop, but it overloads the meaning of `write()`'s
-    promise, diverges from the default writer, still needs a priming call to get the first buffer,
-    and gives `pipeTo()` no way to ask for a buffer without also writing one. `requestBuffer()`
-    keeps the two operations separate; the fused form could be added later as sugar.
+    `reader.read(view)`, it reads well in a loop, and it is what the completion-based APIs surveyed
+    above all chose — `tokio-uring`'s `(res, buf)`, Node's `(err, bytesWritten, buffer)`. It is a
+    strong shape when the returning buffer is always the one you just wrote. It is a weaker one
+    here, because it is not: buffers also come from the sink, so a producer needs to be able to ask
+    for one without having written one first, and so does `pipeTo()`. It also overloads the meaning
+    of `write()`'s promise and diverges from the default writer. `requestBuffer()` covers both
+    origins with one call; the fused form could be added later as sugar over it.
 *   **A `WritableStreamBYOBRequest` on the writer**, mirroring `ReadableStreamBYOBRequest` exactly:
     `await writer.ready`, then `writer.byobRequest.view` and `writer.byobRequest.respond(n)`. This is
     the strict dual, and is a good description of the internal machinery, but it puts a synchronous
@@ -493,6 +613,9 @@ below.
     streams explainer](./streams-for-raw-video.md). That solves ownership but not reuse: the
     producer still allocates every chunk. The two designs agree on transferring at hand-off, and a
     writable byte stream is essentially the byte-specific specialization that adds the return trip.
+*   **Reference counting instead of transferring**, as Netty, `ArrayPool<T>`, and `bytes::Bytes` do.
+    Discussed under [prior art](#reference-counting-which-javascript-cannot-have): it is arguably the
+    nicer model, and it needs a deterministic release that JavaScript does not have.
 *   **Doing nothing, and pooling on the producer side** behind `await writer.write()`. This is what
     careful code does today. It fails whenever the sink transfers the chunk, it serializes the
     producer against the queue rather than against the sink, and it cannot express a sink that owns
@@ -506,8 +629,14 @@ below.
     seem right for consistency, but then what is the default high water mark — one
     `autoAllocateChunkSize` chunk? — and is the number of buffers in circulation the more meaningful
     control anyway, given that it already bounds how much can be in flight?
-*   **`requestBuffer()` and mismatched sizes.** If the first free buffer is smaller than `minSize`,
-    should the stream skip it, wait, coalesce, or allocate? Should a larger one be split?
+*   **`requestBuffer()` and mismatched sizes.** Returning *more* than `minSize` should be allowed,
+    following `GetMemory(sizeHint)`. The rest is open: if the only free buffer is smaller than
+    `minSize`, should the stream skip it, wait, coalesce, or allocate — and should a much larger one
+    be split rather than handed over whole?
+*   **Whether `autoAllocateChunkSize` is really the same dial as the pool size.** With it set, an
+    empty pool means "allocate", which is how Pipelines behaves; without it, an empty pool means
+    "wait", which is how a fixed ring behaves. If those are two settings of one control rather than
+    two features, that should be visible in the API.
 *   **The strict-versus-lenient detach check.** Rule 3 makes returning `undefined` after detaching
     the view an error, which catches a real class of sink bug at the cost of requiring sinks to be
     explicit with `null`. The lenient alternative — silently recycle nothing — is friendlier and
@@ -519,9 +648,15 @@ below.
     for identity transforms.**
 *   **Splitting a chunk** that does not fit the downstream BYOB view, as in the transform example
     above: part into the view, the rest into the queue.
+*   **Scatter/gather.** Every ecosystem surveyed has a vectored form — `poll_write_vectored` with
+    `IoSlice`, `ReadOnlySequence<byte>`, `writev`. This design writes one view per call. Should
+    `write()` accept a sequence of views, and should `requestBuffer()` be able to hand back several?
 *   **Naming**: `mode: "byob"` on a writer, when in the PUTB case the buffer is emphatically not
     your own; `recycle()` versus `provide()`; `WritableByteStreamController` versus
     `WritableStreamByteController`.
-*   **The symmetric gap on the readable side.** There is no way for a consumer to hand a buffer back
-    to an underlying source, which is the mirror image of the problem this explainer solves. If
-    buffers are to circulate through a pipe chain in general, that side may need the same treatment.
+*   **The symmetric gap on the readable side.** There is no way for an underlying source to lend its
+    buffer to a consumer — the empty quadrant in the table above — which is the mirror image of the
+    problem this explainer solves. Other ecosystems have both halves: Rust pairs `Read` with
+    `BufRead`'s `fill_buf`/`consume`, and .NET pairs a BYOB-style read with `PipeReader.ReadAsync`
+    plus `AdvanceTo(consumed, examined)`. If buffers are to circulate through a pipe chain in
+    general, that side may need the same treatment, and there is a well-trodden shape for it.
