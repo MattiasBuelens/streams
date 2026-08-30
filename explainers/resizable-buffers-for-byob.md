@@ -85,6 +85,7 @@ while (true) {
   if (offset === buffer.byteLength) {
     // Buffer is full, grow it *without copying* if possible.
     if (buffer.byteLength >= buffer.maxByteLength) {
+      // No room left, so we cannot tell whether the response ended here.
       throw new RangeError("Response is too large!");
     }
     buffer.resize(Math.min(buffer.byteLength * 2, buffer.maxByteLength));
@@ -95,26 +96,25 @@ while (true) {
 ### Shrink buffer after reading
 
 The code reads a response that can be up to 1024 bytes long into a single `ArrayBuffer`.
-If the response ends up being smaller than 1024 bytes, we resize the buffer to match the exact response size
+Once the response is complete, we resize the buffer to match the exact response size
 and free up the unused bytes of that buffer.
 
 ```javascript
 const MAX_SIZE = 1024;
 const reader = readableStream.getReader({ mode: "byob" });
-// Create a buffer that can fit a complete response (at most MAX_SIZE bytes).
-// It starts out at its maximum size, so it can only ever shrink.
-let buffer = new ArrayBuffer(MAX_SIZE, { maxByteLength: MAX_SIZE });
+// Allocate one byte more than the largest response we accept, so a completely
+// filled buffer means the response was too large.
+// The buffer starts out at its maximum size, so it can only ever shrink.
+let buffer = new ArrayBuffer(MAX_SIZE + 1, { maxByteLength: MAX_SIZE + 1 });
 // Read the whole response. Using `min` means the read only resolves once the
 // buffer is completely filled, or the stream closes before that happens.
 const { value: view, done } =
   await reader.read(new Uint8Array(buffer, 0, buffer.byteLength), { min: buffer.byteLength });
 buffer = view.buffer;
 if (!done) {
-  // We filled the entire buffer, so there may be more bytes still to come
-  // and we have no room left to read them into.
   throw new RangeError(`Response is larger than ${MAX_SIZE} bytes!`);
 }
-// The response was smaller, so shrink the backing buffer *without copying*.
+// Shrink the backing buffer to the exact response size *without copying*.
 buffer.resize(view.byteLength);
 ```
 
@@ -160,10 +160,6 @@ async function supportsResizableBuffersForBYOB() {
     actual size, returning the unused memory instead of holding onto it (the "Shrink buffer after reading" example).
 *   **Framed or length-prefixed protocols.** The consumer reads a small header, learns the size of the payload, and
     resizes the buffer to fit exactly that payload before reading it.
-*   **Reading into WebAssembly memory.** A longer-term goal is to let a stream be read directly into a WebAssembly
-    module's memory, avoiding a copy across the JavaScript/Wasm boundary. Since a Wasm memory can grow, any such
-    integration will need BYOB reads to cope with a buffer whose size can change; accepting resizable `ArrayBuffer`s is
-    a prerequisite for that.
 
 ## End-user Benefits
 
@@ -219,4 +215,7 @@ However, this raises a lot more questions:
     actually filled before handing them to the consumer, could avoid handing out mostly-empty buffers when the source
     produces less data than the chunk size.
 *   **Growable `SharedArrayBuffer`s**, as part of a broader proposal for `SharedArrayBuffer` support in BYOB readers.
-*   **Reading directly into WebAssembly memory**, as described under [Use Cases](#use-cases).
+    That is also what reading directly into a WebAssembly module's memory would need: a BYOB read *transfers*
+    ownership of the buffer, and the `ArrayBuffer` of a WebAssembly memory cannot be transferred. Shared buffers are
+    not transferred, so supporting them comes first; growable shared buffers would then let a read keep up with a
+    WebAssembly memory that grows.
