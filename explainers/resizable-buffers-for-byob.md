@@ -102,17 +102,21 @@ and free up the unused bytes of that buffer.
 ```javascript
 const MAX_SIZE = 1024;
 const reader = readableStream.getReader({ mode: "byob" });
-// Allocate one byte more than the largest response we accept, so a completely
-// filled buffer means the response was too large.
-// The buffer starts out at its maximum size, so it can only ever shrink.
-let buffer = new ArrayBuffer(MAX_SIZE + 1, { maxByteLength: MAX_SIZE + 1 });
+// Create a buffer that can fit a complete response (at most MAX_SIZE bytes).
+// It starts out at its maximum size, so it can only ever shrink.
+let buffer = new ArrayBuffer(MAX_SIZE, { maxByteLength: MAX_SIZE });
 // Read the whole response. Using `min` means the read only resolves once the
 // buffer is completely filled, or the stream closes before that happens.
-const { value: view, done } =
+let { value: view, done } =
   await reader.read(new Uint8Array(buffer, 0, buffer.byteLength), { min: buffer.byteLength });
 buffer = view.buffer;
 if (!done) {
-  throw new RangeError(`Response is larger than ${MAX_SIZE} bytes!`);
+  // We filled the entire buffer, so we have no room left to tell whether the
+  // response ended exactly at MAX_SIZE bytes. Read once more to find out.
+  ({ done } = await reader.read(new Uint8Array(1)));
+  if (!done) {
+    throw new RangeError(`Response is larger than ${MAX_SIZE} bytes!`);
+  }
 }
 // Shrink the backing buffer to the exact response size *without copying*.
 buffer.resize(view.byteLength);
