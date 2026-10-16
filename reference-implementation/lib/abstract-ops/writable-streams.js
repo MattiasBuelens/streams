@@ -359,6 +359,10 @@ function WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream, writer) {
     rejectPromise(stream._closeRequest, stream._storedError);
     stream._closeRequest = undefined;
   }
+  if (stream._writer !== undefined && stream._writer !== writer) {
+    // A different writer was acquired after the stream became errored, so its closed promise is already rejected.
+    assert(stateIsPending(stream._writer._closedPromise) === false);
+  }
   if (writer !== undefined && stream._writer === writer) {
     rejectPromise(writer._closedPromise, stream._storedError);
     setPromiseIsHandledToTrue(writer._closedPromise);
