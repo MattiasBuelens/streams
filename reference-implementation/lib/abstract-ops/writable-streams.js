@@ -240,7 +240,7 @@ function WritableStreamFinishErroring(stream) {
   stream._writeRequests = [];
 
   if (stream._pendingAbortRequest === undefined) {
-    WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream);
+    WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream, stream._writer);
     return;
   }
 
@@ -249,20 +249,21 @@ function WritableStreamFinishErroring(stream) {
 
   if (abortRequest.wasAlreadyErroring === true) {
     rejectPromise(abortRequest.promise, storedError);
-    WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream);
+    WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream, stream._writer);
     return;
   }
 
+  const writer = stream._writer;
   const promise = stream._controller[AbortSteps](abortRequest.reason);
   uponPromise(
     promise,
     () => {
       resolvePromise(abortRequest.promise);
-      WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream);
+      WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream, writer);
     },
     reason => {
       rejectPromise(abortRequest.promise, reason);
-      WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream);
+      WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream, writer);
     });
 }
 
@@ -349,7 +350,7 @@ function WritableStreamMarkFirstWriteRequestInFlight(stream) {
   stream._inFlightWriteRequest = stream._writeRequests.shift();
 }
 
-function WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream) {
+function WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream, writer) {
   verbose('WritableStreamRejectCloseAndClosedPromiseIfNeeded()');
   assert(stream._state === 'errored');
   if (stream._closeRequest !== undefined) {
@@ -358,8 +359,7 @@ function WritableStreamRejectCloseAndClosedPromiseIfNeeded(stream) {
     rejectPromise(stream._closeRequest, stream._storedError);
     stream._closeRequest = undefined;
   }
-  const writer = stream._writer;
-  if (writer !== undefined) {
+  if (writer !== undefined && stream._writer === writer) {
     rejectPromise(writer._closedPromise, stream._storedError);
     setPromiseIsHandledToTrue(writer._closedPromise);
   }

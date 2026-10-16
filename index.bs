@@ -4939,23 +4939,26 @@ the {{WritableStream}}'s public API.
   1. [=Reject=] |writeRequest| with |storedError|.
  1. Set |stream|.[=WritableStream/[[writeRequests]]=] to an empty [=list=].
  1. If |stream|.[=WritableStream/[[pendingAbortRequest]]=] is undefined,
-  1. Perform ! [$WritableStreamRejectCloseAndClosedPromiseIfNeeded$](|stream|).
+  1. Perform ! [$WritableStreamRejectCloseAndClosedPromiseIfNeeded$](|stream|,
+     |stream|.[=WritableStream/[[writer]]=]).
   1. Return.
  1. Let |abortRequest| be |stream|.[=WritableStream/[[pendingAbortRequest]]=].
  1. Set |stream|.[=WritableStream/[[pendingAbortRequest]]=] to undefined.
  1. If |abortRequest|'s [=pending abort request/was already erroring=] is true,
   1. [=Reject=] |abortRequest|'s [=pending abort request/promise=] with |storedError|.
-  1. Perform ! [$WritableStreamRejectCloseAndClosedPromiseIfNeeded$](|stream|).
+  1. Perform ! [$WritableStreamRejectCloseAndClosedPromiseIfNeeded$](|stream|,
+     |stream|.[=WritableStream/[[writer]]=]).
   1. Return.
+ 1. Let |writer| be |stream|.[=WritableStream/[[writer]]=].
  1. Let |promise| be !
     |stream|.[=WritableStream/[[controller]]=].[$WritableStreamController/[[AbortSteps]]$](|abortRequest|'s
     [=pending abort request/reason=]).
  1. [=Upon fulfillment=] of |promise|,
   1. [=Resolve=] |abortRequest|'s [=pending abort request/promise=] with undefined.
-  1. Perform ! [$WritableStreamRejectCloseAndClosedPromiseIfNeeded$](|stream|).
+  1. Perform ! [$WritableStreamRejectCloseAndClosedPromiseIfNeeded$](|stream|, |writer|).
  1. [=Upon rejection=] of |promise| with reason |reason|,
   1. [=Reject=] |abortRequest|'s [=pending abort request/promise=] with |reason|.
-  1. Perform ! [$WritableStreamRejectCloseAndClosedPromiseIfNeeded$](|stream|).
+  1. Perform ! [$WritableStreamRejectCloseAndClosedPromiseIfNeeded$](|stream|, |writer|).
 </div>
 
 <div algorithm>
@@ -5056,7 +5059,8 @@ the {{WritableStream}}'s public API.
 
 <div algorithm>
  <dfn abstract-op noexport lt="WritableStreamRejectCloseAndClosedPromiseIfNeeded"
- id="writable-stream-reject-close-and-closed-promise-if-needed">WritableStreamRejectCloseAndClosedPromiseIfNeeded(|stream|)</dfn>
+ id="writable-stream-reject-close-and-closed-promise-if-needed">WritableStreamRejectCloseAndClosedPromiseIfNeeded(|stream|,
+ |writer|)</dfn>
  performs the following steps:
 
  1. Assert: |stream|.[=WritableStream/[[state]]=] is "`errored`".
@@ -5065,8 +5069,7 @@ the {{WritableStream}}'s public API.
   1. [=Reject=] |stream|.[=WritableStream/[[closeRequest]]=] with
      |stream|.[=WritableStream/[[storedError]]=].
   1. Set |stream|.[=WritableStream/[[closeRequest]]=] to undefined.
- 1. Let |writer| be |stream|.[=WritableStream/[[writer]]=].
- 1. If |writer| is not undefined,
+ 1. If |writer| is not undefined and |stream|.[=WritableStream/[[writer]]=] is |writer|,
   1. [=Reject=] |writer|.[=WritableStreamDefaultWriter/[[closedPromise]]=] with
      |stream|.[=WritableStream/[[storedError]]=].
   1. Set |writer|.[=WritableStreamDefaultWriter/[[closedPromise]]=].\[[PromiseIsHandled]] to true.
