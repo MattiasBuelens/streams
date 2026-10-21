@@ -14,6 +14,10 @@ You can check the test coverage at any time by running `npm run coverage` in thi
 
 To run all tests (and the lint step), run `npm test` in this folder.
 
+### Fuzzing
+
+`npm run fuzz` runs random sequences of public API calls (with randomly-behaving underlying sources, sinks and transformers, interleaved with microtask and macrotask flushes) against the reference implementation, and reports any failed assertion together with the shortest action log that reproduces it. Pass options after `--`, e.g. `npm run fuzz -- --seed=1000 --runs=5000 --steps=200`. A specific failure can be replayed with the `--seed`, `--runs=1` and `--steps` values it reports, adding `--verbose` to print the log as it runs.
+
 ### Web platform tests
 
 The test suite for this standard is written in [web platform tests](https://github.com/web-platform-tests/wpt) format.

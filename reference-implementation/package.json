@@ -7,6 +7,7 @@
     "wpt": "npm run pretest && node --expose_gc run-web-platform-tests.js",
     "sync-wpt": "git submodule update --init",
     "lint": "eslint .",
+    "fuzz": "node compile-idl.js && node fuzz/fuzz.js",
     "coverage": "c8 --reporter=lcov -- npm run wpt && opener coverage/lcov-report/index.html"
   },
   "author": "Domenic Denicola <d@domenic.me> (https://domenic.me/)",
