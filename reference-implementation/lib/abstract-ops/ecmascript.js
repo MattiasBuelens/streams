@@ -29,19 +29,6 @@ exports.IsDetachedBuffer = O => {
   return ArrayBufferPrototypeDetachedGetter.call(O) === true;
 };
 
-exports.IteratorNext = (iteratorRecord, value) => {
-  let result;
-  if (value === undefined) {
-    result = exports.Call(iteratorRecord.nextMethod, iteratorRecord.iterator);
-  } else {
-    result = exports.Call(iteratorRecord.nextMethod, iteratorRecord.iterator, [value]);
-  }
-  if (!exports.typeIsObject(result)) {
-    throw new TypeError('The iterator.next() method must return an object');
-  }
-  return result;
-};
-
 exports.IteratorComplete = iterResult => {
   assert(exports.typeIsObject(iterResult));
   return Boolean(iterResult.done);
