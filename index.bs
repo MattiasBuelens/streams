@@ -2457,6 +2457,17 @@ create them does not matter.
  1. Let |branch1| be undefined.
  1. Let |branch2| be undefined.
  1. Let |cancelPromise| be [=a new promise=].
+ 1. Let |errorBranchesAndCancel| be the following steps, taking an |e| argument:
+  1. Perform ! [$ReadableByteStreamControllerError$](|branch1|.[=ReadableStream/[[controller]]=],
+     |e|).
+  1. Perform ! [$ReadableByteStreamControllerError$](|branch2|.[=ReadableStream/[[controller]]=],
+     |e|).
+  1. [=Resolve=] |cancelPromise| with ! [$ReadableStreamCancel$](|stream|, |e|).
+
+  <p class="note">This is used when cloning a chunk for the other branch fails, or when enqueuing a
+  chunk into or responding to a branch fails because that branch could not allocate a copy of some
+  bytes for its queue. Erroring both branches and canceling |stream| ensures that a branch never
+  becomes errored on its own.
  1. Let |forwardReaderError| be the following steps, taking a |thisReader| argument:
   1. [=Upon rejection=] of |thisReader|.[=ReadableStreamGenericReader/[[closedPromise]]=] with reason
      |r|,
@@ -2482,17 +2493,23 @@ create them does not matter.
      1. If |canceled1| is false and |canceled2| is false,
       1. Let |cloneResult| be [$CloneAsUint8Array$](|chunk|).
       1. If |cloneResult| is an abrupt completion,
-       1. Perform ! [$ReadableByteStreamControllerError$](|branch1|.[=ReadableStream/[[controller]]=], |cloneResult|.\[[Value]]).
-       1. Perform ! [$ReadableByteStreamControllerError$](|branch2|.[=ReadableStream/[[controller]]=], |cloneResult|.\[[Value]]).
-       1. [=Resolve=] |cancelPromise| with ! [$ReadableStreamCancel$](|stream|, |cloneResult|.\[[Value]]).
+       1. Perform |errorBranchesAndCancel|, given |cloneResult|.\[[Value]].
        1. Return.
       1. Otherwise, set |chunk2| to |cloneResult|.\[[Value]].
-     1. If |canceled1| is false, perform !
-        [$ReadableByteStreamControllerEnqueue$](|branch1|.[=ReadableStream/[[controller]]=],
-        |chunk1|).
-     1. If |canceled2| is false, perform !
-        [$ReadableByteStreamControllerEnqueue$](|branch2|.[=ReadableStream/[[controller]]=],
-        |chunk2|).
+     1. If |canceled1| is false,
+      1. Let |enqueueResult1| be
+         [$ReadableByteStreamControllerEnqueue$](|branch1|.[=ReadableStream/[[controller]]=],
+         |chunk1|).
+      1. If |enqueueResult1| is an abrupt completion,
+       1. Perform |errorBranchesAndCancel|, given |enqueueResult1|.\[[Value]].
+       1. Return.
+     1. If |canceled2| is false,
+      1. Let |enqueueResult2| be
+         [$ReadableByteStreamControllerEnqueue$](|branch2|.[=ReadableStream/[[controller]]=],
+         |chunk2|).
+      1. If |enqueueResult2| is an abrupt completion,
+       1. Perform |errorBranchesAndCancel|, given |enqueueResult2|.\[[Value]].
+       1. Return.
      1. Set |reading| to false.
      1. If |readAgainForBranch1| is true, perform |pull1Algorithm|.
      1. Otherwise, if |readAgainForBranch2| is true, perform |pull2Algorithm|.
@@ -2537,22 +2554,27 @@ create them does not matter.
      1. Set |readAgainForBranch2| to false.
      1. Let |byobCanceled| be |canceled2| if |forBranch2| is true, and |canceled1| otherwise.
      1. Let |otherCanceled| be |canceled2| if |forBranch2| is false, and |canceled1| otherwise.
+     1. Let |clonedChunk| be undefined.
      1. If |otherCanceled| is false,
       1. Let |cloneResult| be [$CloneAsUint8Array$](|chunk|).
       1. If |cloneResult| is an abrupt completion,
-       1. Perform ! [$ReadableByteStreamControllerError$](|byobBranch|.[=ReadableStream/[[controller]]=], |cloneResult|.\[[Value]]).
-       1. Perform ! [$ReadableByteStreamControllerError$](|otherBranch|.[=ReadableStream/[[controller]]=], |cloneResult|.\[[Value]]).
-       1. [=Resolve=] |cancelPromise| with ! [$ReadableStreamCancel$](|stream|, |cloneResult|.\[[Value]]).
+       1. Perform |errorBranchesAndCancel|, given |cloneResult|.\[[Value]].
        1. Return.
-      1. Otherwise, let |clonedChunk| be |cloneResult|.\[[Value]].
-      1. If |byobCanceled| is false, perform !
+      1. Otherwise, set |clonedChunk| to |cloneResult|.\[[Value]].
+     1. If |byobCanceled| is false,
+      1. Let |respondResult| be
          [$ReadableByteStreamControllerRespondWithNewView$](|byobBranch|.[=ReadableStream/[[controller]]=],
          |chunk|).
-      1. Perform ! [$ReadableByteStreamControllerEnqueue$](|otherBranch|.[=ReadableStream/[[controller]]=],
+      1. If |respondResult| is an abrupt completion,
+       1. Perform |errorBranchesAndCancel|, given |respondResult|.\[[Value]].
+       1. Return.
+     1. If |otherCanceled| is false,
+      1. Let |enqueueResult| be
+         [$ReadableByteStreamControllerEnqueue$](|otherBranch|.[=ReadableStream/[[controller]]=],
          |clonedChunk|).
-     1. Otherwise, if |byobCanceled| is false, perform !
-        [$ReadableByteStreamControllerRespondWithNewView$](|byobBranch|.[=ReadableStream/[[controller]]=],
-        |chunk|).
+      1. If |enqueueResult| is an abrupt completion,
+       1. Perform |errorBranchesAndCancel|, given |enqueueResult|.\[[Value]].
+       1. Return.
      1. Set |reading| to false.
      1. If |readAgainForBranch1| is true, perform |pull1Algorithm|.
      1. Otherwise, if |readAgainForBranch2| is true, perform |pull2Algorithm|.

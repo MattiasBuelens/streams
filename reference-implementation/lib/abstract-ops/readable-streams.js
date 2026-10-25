@@ -481,6 +481,12 @@ function ReadableByteStreamTee(stream) {
 
   const cancelPromise = newPromise();
 
+  function errorBranchesAndCancel(e) {
+    ReadableByteStreamControllerError(branch1._controller, e);
+    ReadableByteStreamControllerError(branch2._controller, e);
+    resolvePromise(cancelPromise, ReadableStreamCancel(stream, e));
+  }
+
   function forwardReaderError(thisReader) {
     uponRejection(thisReader._closedPromise, r => {
       if (thisReader !== reader) {
@@ -518,18 +524,21 @@ function ReadableByteStreamTee(stream) {
             try {
               chunk2 = CloneAsUint8Array(chunk);
             } catch (cloneE) {
-              ReadableByteStreamControllerError(branch1._controller, cloneE);
-              ReadableByteStreamControllerError(branch2._controller, cloneE);
-              resolvePromise(cancelPromise, ReadableStreamCancel(stream, cloneE));
+              errorBranchesAndCancel(cloneE);
               return;
             }
           }
 
-          if (canceled1 === false) {
-            ReadableByteStreamControllerEnqueue(branch1._controller, chunk1);
-          }
-          if (canceled2 === false) {
-            ReadableByteStreamControllerEnqueue(branch2._controller, chunk2);
+          try {
+            if (canceled1 === false) {
+              ReadableByteStreamControllerEnqueue(branch1._controller, chunk1);
+            }
+            if (canceled2 === false) {
+              ReadableByteStreamControllerEnqueue(branch2._controller, chunk2);
+            }
+          } catch (enqueueE) {
+            errorBranchesAndCancel(enqueueE);
+            return;
           }
 
           reading = false;
@@ -589,22 +598,26 @@ function ReadableByteStreamTee(stream) {
           const byobCanceled = forBranch2 ? canceled2 : canceled1;
           const otherCanceled = forBranch2 ? canceled1 : canceled2;
 
+          let clonedChunk;
           if (otherCanceled === false) {
-            let clonedChunk;
             try {
               clonedChunk = CloneAsUint8Array(chunk);
             } catch (cloneE) {
-              ReadableByteStreamControllerError(byobBranch._controller, cloneE);
-              ReadableByteStreamControllerError(otherBranch._controller, cloneE);
-              resolvePromise(cancelPromise, ReadableStreamCancel(stream, cloneE));
+              errorBranchesAndCancel(cloneE);
               return;
             }
+          }
+
+          try {
             if (byobCanceled === false) {
               ReadableByteStreamControllerRespondWithNewView(byobBranch._controller, chunk);
             }
-            ReadableByteStreamControllerEnqueue(otherBranch._controller, clonedChunk);
-          } else if (byobCanceled === false) {
-            ReadableByteStreamControllerRespondWithNewView(byobBranch._controller, chunk);
+            if (otherCanceled === false) {
+              ReadableByteStreamControllerEnqueue(otherBranch._controller, clonedChunk);
+            }
+          } catch (respondE) {
+            errorBranchesAndCancel(respondE);
+            return;
           }
 
           reading = false;
