@@ -3349,6 +3349,7 @@ The following abstract operations support the implementation of the
  1. Otherwise, if ! [$ReadableStreamHasBYOBReader$](|stream|) is true,
   1. Perform ! [$ReadableByteStreamControllerEnqueueChunkToQueue$](|controller|,
      |transferredBuffer|, |byteOffset|, |byteLength|).
+  <!-- [[closeRequested]] is false here, so this cannot throw. -->
   1. Let |filledPullIntos| be the result of performing
      ! [$ReadableByteStreamControllerProcessPullIntoDescriptorsUsingQueue$](|controller|).
   1. [=list/For each=] |filledPullInto| of |filledPullIntos|,
@@ -3805,6 +3806,7 @@ The following abstract operations support the implementation of the
  1. If |pullIntoDescriptor|'s [=pull-into descriptor/reader type=] is "`none`",
   1. Perform ? [$ReadableByteStreamControllerEnqueueDetachedPullIntoToQueue$](|controller|,
      |pullIntoDescriptor|).
+  <!-- [[closeRequested]] is false here, so this cannot throw. -->
   1. Let |filledPullIntos| be the result of performing
      ! [$ReadableByteStreamControllerProcessPullIntoDescriptorsUsingQueue$](|controller|).
   1. [=list/For each=] |filledPullInto| of |filledPullIntos|,
@@ -3820,6 +3822,7 @@ The following abstract operations support the implementation of the
  1. Perform ! [$ReadableByteStreamControllerShiftPendingPullInto$](|controller|).
  1. Perform ? [$ReadableByteStreamControllerEnqueueRemainderToQueue$](|controller|,
     |pullIntoDescriptor|).
+ <!-- [[closeRequested]] is false here, so this cannot throw. -->
  1. Let |filledPullIntos| be the result of performing
     ! [$ReadableByteStreamControllerProcessPullIntoDescriptorsUsingQueue$](|controller|).
  1. Perform !
