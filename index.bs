@@ -3782,7 +3782,10 @@ The following abstract operations support the implementation of the
     ? [$ReadableByteStreamControllerProcessPullIntoDescriptorsUsingQueue$](|controller|).
  1. [=list/For each=] |filledPullInto| of |filledPullIntos|,
   1. Perform ! [$ReadableByteStreamControllerCommitPullIntoDescriptor$](|stream|, |filledPullInto|).
- 1. Perform ! [$ReadableByteStreamControllerHandleQueueDrain$](|controller|).
+ 1. If ! [$ReadableStreamHasDefaultReader$](|stream|) is true, perform !
+    [$ReadableByteStreamControllerProcessReadRequestsUsingQueue$](|controller|).
+ 1. If |stream|.[=ReadableStream/[[state]]=] is "`readable`", perform !
+    [$ReadableByteStreamControllerHandleQueueDrain$](|controller|).
  1. If |stream|.[=ReadableStream/[[state]]=] is "`closed`" and
     |controller|.[=ReadableByteStreamController/[[pendingPullIntos]]=] is not [=list/is
     empty|empty=], perform ! [$ReadableByteStreamControllerRespondInClosedState$](|controller|,

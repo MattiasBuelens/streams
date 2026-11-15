@@ -1746,8 +1746,14 @@ function ReadableByteStreamControllerRespondInCloseRequestedState(controller, fi
   for (const filledPullInto of filledPullIntos) {
     ReadableByteStreamControllerCommitPullIntoDescriptor(stream, filledPullInto);
   }
+  if (ReadableStreamHasDefaultReader(stream) === true) {
+    ReadableByteStreamControllerProcessReadRequestsUsingQueue(controller);
+  }
 
-  ReadableByteStreamControllerHandleQueueDrain(controller);
+  // Filling a read request from the queue may have closed the stream already.
+  if (stream._state === 'readable') {
+    ReadableByteStreamControllerHandleQueueDrain(controller);
+  }
   if (stream._state === 'closed' && controller._pendingPullIntos.length > 0) {
     ReadableByteStreamControllerRespondInClosedState(controller, controller._pendingPullIntos[0]);
   }
