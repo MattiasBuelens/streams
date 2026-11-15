@@ -201,6 +201,10 @@ function ReadableStreamPipeTo(source, dest, preventClose, preventAbort, preventC
       }
 
       return transformPromiseWith(writer._readyPromise, () => {
+        // A shutdown may have started (and finished, releasing the reader) while we waited.
+        if (shuttingDown === true) {
+          return true;
+        }
         return new Promise((resolveRead, rejectRead) => {
           ReadableStreamDefaultReaderRead(
             reader,
